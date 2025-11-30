@@ -6,27 +6,43 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: deploy-portfolio-main
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # útil para obter o SHA completo
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
 
       - name: Install dependencies (for lint/tests)
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          # Adicione aqui ferramentas de teste/lint se usar (pytest, ruff, mypy)
+          # Ferramentas de qualidade (opcionais):
           # pip install pytest ruff mypy
 
-      # - name: Run tests (opcional)
+      # - name: Lint (ruff) - opcional
+      #   run: |
+      #     ruff check .
+
+      # - name: Type check (mypy) - opcional
+      #   run: |
+      #     mypy .
+
+      # - name: Run tests (pytest) - opcional
       #   run: |
       #     pytest -q
 
@@ -39,15 +55,25 @@ jobs:
         run: |
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy via SSH
+      - name: Deploy via SSH (rsync + prepare)
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
           EC2_PROJECT_PATH: ${{ secrets.EC2_PROJECT_PATH }}
           EC2_SERVICE_NAME: ${{ secrets.EC2_SERVICE_NAME }}
+          GIT_SHA: ${{ github.sha }}
         run: |
+          # Envia os arquivos do repo para a EC2 (exclui .git e venv)
           rsync -avz --delete --exclude '.git/' --exclude 'venv/' . ${EC2_USER}@${EC2_HOST}:${EC2_PROJECT_PATH}/
-          ssh ${EC2_USER}@${EC2_HOST} "bash ${EC2_PROJECT_PATH}/scripts/deploy.sh"
+
+          # Garante que scripts tenham permissão de execução
+          ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=15 ${EC2_USER}@${EC2_HOST} "chmod +x ${EC2_PROJECT_PATH}/scripts/deploy.sh ${EC2_PROJECT_PATH}/scripts/smoke-test.sh || true"
+
+          # Escreve o SHA do commit atual em um arquivo na EC2 (útil para auditoria/rollback)
+          ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=15 ${EC2_USER}@${EC2_HOST} "echo ${GIT_SHA} | sudo tee ${EC2_PROJECT_PATH}/DEPLOY_COMMIT_SHA.txt >/dev/null"
+
+          # Executa o deploy
+          ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=15 ${EC2_USER}@${EC2_HOST} "bash ${EC2_PROJECT_PATH}/scripts/deploy.sh"
 
       - name: Smoke test
         env:
@@ -55,4 +81,4 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
           EC2_PROJECT_PATH: ${{ secrets.EC2_PROJECT_PATH }}
         run: |
-          ssh ${EC2_USER}@${EC2_HOST} "bash ${EC2_PROJECT_PATH}/scripts/smoke-test.sh"
+          ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=15 ${EC2_USER}@${EC2_HOST} "bash ${EC2_PROJECT_PATH}/scripts/smoke-test.sh"
