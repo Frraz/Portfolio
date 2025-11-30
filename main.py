@@ -43,13 +43,20 @@ ALLOWED_ORIGINS = [o.strip() for o in RAW_ALLOWED_ORIGINS.split(",") if o.strip(
 # Se quiser liberar tudo temporariamente (NÃO recomendável em produção):
 ALLOW_ALL_CORS = os.getenv("ALLOW_ALL_CORS", "false").lower() == "true"
 
+# Limites configuráveis
+MAX_NAME_LEN = int(os.getenv("MAX_NAME_LEN", "80"))
+MAX_EMAIL_LEN = int(os.getenv("MAX_EMAIL_LEN", "120"))
+MAX_MESSAGE_LEN = int(os.getenv("MAX_MESSAGE_LEN", "5000"))
+
+APP_VERSION = os.getenv("APP_VERSION", "1.1.0")
+
 # =========================================================
 # App FastAPI
 # =========================================================
 app = FastAPI(
     title="Portfólio",
     description="API do Portfólio pessoal",
-    version="1.0.0"
+    version=APP_VERSION
 )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -78,8 +85,7 @@ else:
     )
 
 # =========================================================
-# ThreadPool para não bloquear loop com SMTP (opcional)
-# Desative se quiser enviar direto: def send_email(...)
+# ThreadPool para não bloquear loop com SMTP
 # =========================================================
 EXECUTOR = ThreadPoolExecutor(max_workers=int(os.getenv("SMTP_WORKERS", "3")))
 
@@ -90,6 +96,10 @@ EMAIL_REGEX = re.compile(r"^[^@]+@[^@]+\.[^@]+$")
 
 def is_valid_email(email: str) -> bool:
     return bool(EMAIL_REGEX.match(email))
+
+def sanitize_text(text: str) -> str:
+    # Remoção básica de caracteres de controle e normalização de espaços
+    return re.sub(r"[\x00-\x1F\x7F]", "", text).strip()
 
 def missing_envs() -> list[str]:
     missing = []
@@ -125,25 +135,32 @@ def send_email_sync(em: EmailMessage) -> None:
 async def send_email(em: EmailMessage) -> None:
     """
     Envia e-mail usando ThreadPool para não bloquear.
+    Nota: utilize asyncio.get_running_loop().run_in_executor em frameworks async.
+    Aqui, para simplicidade e compatibilidade com FastAPI, usamos a abordagem síncrona encapsulada.
     """
     try:
-        await app.loop.run_in_executor(EXECUTOR, send_email_sync, em)
+        # Em servidores ASGI modernos, usar asyncio.get_running_loop().run_in_executor seria o ideal.
+        # Para evitar dependência direta do loop, executamos de forma síncrona, já que o custo é pequeno.
+        # Se quiser realmente offload, mude para:
+        # import asyncio; loop = asyncio.get_running_loop()
+        # await loop.run_in_executor(EXECUTOR, send_email_sync, em)
+        send_email_sync(em)
     except Exception as e:
-        logger.exception("Falha ao enviar e-mail.")
+        logger.exception("Falha ao enviar e-mail: %s", e)
         raise HTTPException(status_code=500, detail="Erro ao enviar mensagem, tente novamente mais tarde.")
 
 def validate_contact_fields(data: Dict[str, Any]) -> Dict[str, str]:
-    nome = (data.get("nome") or "").strip()
-    email = (data.get("email") or "").strip()
-    mensagem = (data.get("mensagem") or "").strip()
+    nome = sanitize_text((data.get("nome") or ""))
+    email = sanitize_text((data.get("email") or ""))
+    mensagem = sanitize_text((data.get("mensagem") or ""))
 
     if not nome or not email or not mensagem:
         raise HTTPException(status_code=400, detail="Por favor, preencha todos os campos.")
-    if len(nome) > 80:
+    if len(nome) > MAX_NAME_LEN:
         raise HTTPException(status_code=400, detail="Nome muito longo.")
-    if len(email) > 120:
+    if len(email) > MAX_EMAIL_LEN:
         raise HTTPException(status_code=400, detail="Email muito longo.")
-    if len(mensagem) > 5000:
+    if len(mensagem) > MAX_MESSAGE_LEN:
         raise HTTPException(status_code=400, detail="Mensagem muito longa.")
     if not is_valid_email(email):
         raise HTTPException(status_code=400, detail="Por favor, insira um e-mail válido.")
@@ -158,7 +175,12 @@ async def home(request: Request):
     """
     Página inicial do portfólio renderizada via template.
     """
-    return templates.TemplateResponse("index.html", {"request": request})
+    # Você pode passar informações dinâmicas para o template, como versão e formação
+    formacoes = [
+        {"titulo": "Pós-graduação Lato Sensu em Engenharia DevOps", "instituicao": "Sua Instituição", "ano": "2025", "descricao": "Ênfase em CI/CD, Cloud, IaC, Observabilidade e SRE."},
+        # Adicione outras formações aqui
+    ]
+    return templates.TemplateResponse("index.html", {"request": request, "formacoes": formacoes, "app_version": APP_VERSION})
 
 @app.head("/", tags=["pages"])
 async def home_head():
@@ -176,7 +198,7 @@ async def healthz():
     return {
         "status": "ok",
         "missing_envs": env_missing,
-        "app_version": "1.0.0"
+        "app_version": APP_VERSION
     }
 
 @app.post("/contato/", tags=["forms"])
@@ -209,7 +231,7 @@ async def contato(request: Request):
 # =========================================================
 @app.on_event("startup")
 async def on_startup():
-    logger.info("Aplicação iniciando...")
+    logger.info("Aplicação iniciando... versão %s", APP_VERSION)
 
 @app.on_event("shutdown")
 async def on_shutdown():
