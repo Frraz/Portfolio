@@ -3,6 +3,7 @@
 # =========================
 # Virtualenv (nomes comuns)
 venv/
+venv
 .env/
 .env.bak/
 .virtualenv/
