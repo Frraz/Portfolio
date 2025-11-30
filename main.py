@@ -2,6 +2,8 @@
 main.py - Aplicação FastAPI do Portfólio
 """
 
+#Comentário aleatório
+
 import os
 import re
 import ssl

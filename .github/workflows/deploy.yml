@@ -1,0 +1,58 @@
+name: Deploy Portfolio to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (for lint/tests)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Adicione aqui ferramentas de teste/lint se usar (pytest, ruff, mypy)
+          # pip install pytest ruff mypy
+
+      # - name: Run tests (opcional)
+      #   run: |
+      #     pytest -q
+
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Known hosts - add EC2
+        run: |
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy via SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PROJECT_PATH: ${{ secrets.EC2_PROJECT_PATH }}
+          EC2_SERVICE_NAME: ${{ secrets.EC2_SERVICE_NAME }}
+        run: |
+          rsync -avz --delete --exclude '.git/' --exclude 'venv/' . ${EC2_USER}@${EC2_HOST}:${EC2_PROJECT_PATH}/
+          ssh ${EC2_USER}@${EC2_HOST} "bash ${EC2_PROJECT_PATH}/scripts/deploy.sh"
+
+      - name: Smoke test
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PROJECT_PATH: ${{ secrets.EC2_PROJECT_PATH }}
+        run: |
+          ssh ${EC2_USER}@${EC2_HOST} "bash ${EC2_PROJECT_PATH}/scripts/smoke-test.sh"
