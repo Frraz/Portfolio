@@ -1,22 +1,137 @@
-# Ambiente virtual
+# =========================
+# AMBIENTES / DEPENDÊNCIAS
+# =========================
+# Virtualenv (nomes comuns)
 venv/
+.env/
+.env.bak/
+.virtualenv/
+.pyenv/
+
+# Caso use Poetry (se vier a adotar)
+# .venv/
+
+# =========================
+# ARQUIVOS DE AMBIENTE
+# =========================
+# NUNCA commitar segredos reais.
+# Mantenha .env.example (não ignore) para referência.
 .env
-*.env
-# __pycache__ e caches do Python
+.env.local
+.env.*.local
+
+# Evite ignorar .env.example (garanta que o nome seja exatamente esse)
+!.env.example
+
+# =========================
+# PYTHON CACHE / BUILD
+# =========================
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-# IDEs
+*.py[cod]
+*$py.class
+
+# Distribuição / pacotes
+build/
+dist/
+wheels/
+*.egg-info/
+.eggs/
+*.egg
+MANIFEST
+pip-wheel-metadata/
+
+# Cache de ferramentas
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.nox/
+.tox/
+
+# =========================
+# COBERTURA / TESTES
+# =========================
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+pytestdebug.log
+
+# =========================
+# LOGS / TEMP
+# =========================
+logs/
+*.log
+tmp/
+temp/
+*.tmp
+
+# =========================
+# DADOS / SQLITE / DB LOCAIS
+# =========================
+*.sqlite3
+*.db
+*.db-journal
+
+# =========================
+# FRONTEND / BUILD ESTÁTICO
+# (apenas se você gerar assets; ajuste se usar build process)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+
+# Se gerar assets compilados separadamente (exemplo: front/dist/)
+# dist_frontend/
+
+# =========================
+# EDITORES / IDEs
+# =========================
 .vscode/
 .idea/
 *.sublime-project
 *.sublime-workspace
-# Arquivos do sistema
+
+# =========================
+# SISTEMA / SISTEMAS OPERACIONAIS
+# =========================
 .DS_Store
 Thumbs.db
-# Arquivos de log
-*.log
-# Pasta de uploads ou arquivos temporários
-tmp/
-*.sqlite3
+desktop.ini
+
+# =========================
+# BACKUPS / DUMPS / DADOS INTERNOS
+# =========================
+*.bak
+*.old
+*.orig
+*.swp
+*.swo
+
+# =========================
+# ARQUIVOS SENSÍVEIS (CHAVES/SSL)
+# (Se você realmente precisa versionar algo, remova aqui)
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+
+# =========================
+# JUPYTER / NOTEBOOKS (se usar e não quiser versionar checkpoints)
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# DOCKER (se gerar artefatos locais)
+# =========================
+# docker-compose.override.yml (se for específico de máquina)
+# *.dockerfile.swp
+
+# =========================
+# OUTROS (ajuste conforme necessidade)
+# =========================
+# Fotos originais grandes (se apenas versões otimizadas forem commitadas)
+# original_images/
